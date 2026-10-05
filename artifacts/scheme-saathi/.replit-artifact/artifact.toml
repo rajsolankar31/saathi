@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "SchemeSaathi"
+description = "A mobile-first prototype that guides people through government benefit questions, evaluates clearly labeled fictional demo rules, explains possible matches, and creates application checklists. No official scheme data is included yet."
+version = "1.0.0"
+id = "artifacts/scheme-saathi"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18422
+
+[services.development]
+run = "pnpm --filter @workspace/scheme-saathi run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/scheme-saathi", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/scheme-saathi/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18422"
+BASE_PATH = "/"

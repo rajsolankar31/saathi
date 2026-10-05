@@ -1,0 +1,1 @@
+- [Eligibility integrity](eligibility-integrity.md) — keep benefit decisions deterministic, sourced, human-reviewed, and privacy-preserving.
