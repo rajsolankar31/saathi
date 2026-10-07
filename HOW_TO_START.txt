@@ -1,0 +1,87 @@
+========================================================================
+                      SCHEMESAATHI (स्कीमसाथी)
+       HOW TO RUN THE PROJECT FROM ZERO TO WORKING ON LOCALHOST
+========================================================================
+
+Welcome to SchemeSaathi! Follow these simple steps to run this project
+on your computer.
+
+------------------------------------------------------------------------
+METHOD 1: THE EASIEST WAY (1-CLICK DOUBLE CLICK)
+------------------------------------------------------------------------
+
+1. Open this project folder in File Explorer:
+   "SchemeSaathi-MVP"
+
+2. Double-click the file named:
+   "start.bat"
+
+3. That's it!
+   - It will check if Node.js is installed.
+   - It will install packages automatically (if running for the first time).
+   - It will automatically open your default browser to:
+     http://localhost:5173/
+
+4. To STOP the server:
+   Click into the black Command Prompt window and press Ctrl + C, or simply
+   close the window.
+
+
+------------------------------------------------------------------------
+METHOD 2: RUNNING MANUALLY VIA POWERSHELL OR CMD
+------------------------------------------------------------------------
+
+If you prefer to run it using the terminal:
+
+1. Open PowerShell or Command Prompt in this project folder:
+   (In Windows File Explorer, click the address bar, type "powershell" or "cmd",
+   and press Enter).
+
+2. Make sure Node.js is installed:
+   node -v
+
+3. Install packages (only needed once):
+   npx pnpm install --ignore-scripts
+
+4. Start the application:
+   npx pnpm --filter @workspace/scheme-saathi run dev
+
+5. Open your browser and go to:
+   http://localhost:5173/
+
+
+------------------------------------------------------------------------
+PREREQUISITES (IF RUNNING ON A NEW COMPUTER)
+------------------------------------------------------------------------
+
+- Node.js (version 20 or higher):
+  If you don't have Node.js installed, download and install the free LTS
+  version from:
+  https://nodejs.org/
+
+
+------------------------------------------------------------------------
+WHAT YOU WILL SEE ON LOCALHOST (FEATURES)
+------------------------------------------------------------------------
+
+1. Search & Directory:
+   - Real-time search for all 28+ Maharashtra (MahaDBT) and Central schemes
+     (e.g., EBC Scholarship, Tractor Subsidy, Ladki Bahin, SC Freeship, Hostel).
+   - Filter by Portal (MahaDBT / Central / State), Support Area, and Caste.
+
+2. 1-Click Eligibility Check:
+   - Select your Domicile, Caste, Income, and Landholding to see live
+     eligibility results.
+
+3. Direct Registration & Application Links:
+   - Every scheme has working links to official government portals:
+     * New Registration Link (e.g., MahaDBT Register)
+     * Direct Apply / Login Link (e.g., MahaDBT Login)
+     * Official Guidelines / GR link
+
+4. Document Checklist & Printing:
+   - Interactive tick-box checklist for Setu Kendra / Maha e-Seva Kendra
+     visits.
+   - Print or save as PDF button.
+
+========================================================================
