@@ -1,383 +1,1193 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, ArrowRight, Check, ChevronRight, CircleHelp, ClipboardList, ExternalLink, Languages, Mic, Printer, RotateCcw, ShieldCheck, Sprout, Volume2 } from 'lucide-react';
+import {
+  AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight,
+  CircleHelp, ClipboardList, ExternalLink, Filter, HelpCircle,
+  Languages, Mic, Printer, RotateCcw, Search, ShieldCheck, Sparkles, Sprout,
+  UserCheck, UserPlus, Volume2, X
+} from 'lucide-react';
 import {
   schemes, type Profile, type Field, type Rule, type Truth, type Scheme, type Localized,
   options, fieldLabels, questionHelp, supportAreas, initialProfile, evaluate, unresolvedFields, getSchemeResult,
 } from './scheme-data';
 
-type Screen = 'language' | 'mode' | 'privacy' | 'category' | 'questions' | 'review' | 'results' | 'detail' | 'prep';
+type ViewTab = 'directory' | 'checker' | 'wizard';
+type WizardScreen = 'category' | 'questions' | 'review' | 'results';
+type AppScreen = 'main' | 'detail' | 'prep';
 type Language = 'en' | 'hi';
 type Mode = 'self' | 'assisted';
 
 const copy: Record<string, Localized> = {
-  start: { en: 'Find support that may fit your situation', hi: 'अपनी स्थिति के अनुसार सहायता खोजें' },
-  intro: { en: 'A careful first look at selected central government schemes. Choose an area, answer only what is relevant, and check the official source before taking a next step.', hi: 'चुनी हुई केंद्र सरकार की योजनाओं की सावधानीपूर्वक शुरुआती जानकारी। क्षेत्र चुनें, सिर्फ ज़रूरी सवालों के जवाब दें और आगे बढ़ने से पहले आधिकारिक स्रोत देखें।' },
-  language: { en: 'Choose a language', hi: 'भाषा चुनें' },
-  modeTitle: { en: 'Would you like to explore alone or together?', hi: 'क्या आप अकेले देखना चाहेंगे या किसी के साथ?' },
-  modeText: { en: 'Either way, the questions are the same. You can skip anything you do not know.', hi: 'दोनों तरीकों में सवाल एक जैसे हैं। जो जानकारी न हो, उसे छोड़ सकते हैं।' },
-  self: { en: 'I am exploring for myself', hi: 'मैं अपने लिए देख रहा / रही हूँ' },
-  selfHint: { en: 'Take each step at your own pace.', hi: 'हर कदम अपनी सुविधा से लें।' },
-  assisted: { en: 'I am helping someone', hi: 'मैं किसी की मदद कर रहा / रही हूँ' },
-  assistedHint: { en: 'Read the questions together. No account or personal identity details are needed.', hi: 'सवाल साथ में पढ़ें। खाते या निजी पहचान की जानकारी की ज़रूरत नहीं।' },
-  privacyTitle: { en: 'Your answers stay with you', hi: 'आपके जवाब आपके पास ही रहते हैं' },
-  privacyText: { en: 'Answers stay only in this page’s session memory. They are not saved or sent by SchemeSaathi, and disappear when you clear or close the session. Opening an official link transfers information only to that government site. Never type identity or bank numbers into SchemeSaathi.', hi: 'जवाब सिर्फ इस पेज की सेशन मेमोरी में रहते हैं। SchemeSaathi इन्हें सेव या भेजता नहीं है; सेशन मिटाने या पेज बंद करने पर जवाब हट जाते हैं। आधिकारिक लिंक खोलने पर जानकारी केवल उस सरकारी साइट को जाती है। SchemeSaathi में पहचान या बैंक नंबर कभी न लिखें।' },
-  categoryTitle: { en: 'What kind of support are you looking for?', hi: 'आप किस तरह की सहायता ढूँढ रहे हैं?' },
-  categoryText: { en: 'Choose one area, or look across all seven. We will ask only questions needed for schemes in that selection.', hi: 'एक क्षेत्र चुनें या सभी सात क्षेत्रों में देखें। चुनी गई योजनाओं के लिए ज़रूरी सवाल ही पूछेंगे।' },
-  allAreas: { en: 'All support areas', hi: 'सभी सहायता क्षेत्र' },
-  allDesc: { en: 'Look across the selected central-scheme catalog', hi: 'चुनी हुई केंद्रीय योजनाओं में देखें' },
-  unknown: { en: 'I do not know / skip this', hi: 'पता नहीं / छोड़ें' },
-  skipped: { en: 'Not known / skipped', hi: 'पता नहीं / छोड़ा' },
-  reviewTitle: { en: 'Review the answers used', hi: 'इस्तेमाल किए गए जवाब देखें' },
-  reviewText: { en: 'These are the answers used for this screening. Change any answer before viewing the results.', hi: 'इस शुरुआती जाँच में इन जवाबों का उपयोग होगा। नतीजे देखने से पहले कोई भी जवाब बदल सकते हैं।' },
-  resultsTitle: { en: 'A careful first look', hi: 'सावधानीपूर्वक शुरुआती जानकारी' },
-  resultsText: { en: 'These statuses compare your reported answers with published screening rules. They do not decide eligibility or promise approval.', hi: 'ये स्थितियाँ आपके बताए जवाबों की प्रकाशित शुरुआती जाँच के नियमों से तुलना करती हैं। ये पात्रता तय नहीं करतीं और मंज़ूरी का वादा नहीं हैं।' },
-  caveatTitle: { en: 'Important limits', hi: 'ज़रूरी सीमाएँ' },
-  caveat: { en: 'This screening is informational only; only the responsible authority decides eligibility. This first catalog covers selected pan-India central schemes and State/UT-specific catalog coverage is not comprehensive. Rules and processes can change. Confirm current details with the official scheme source or the relevant authority.', hi: 'यह शुरुआती जाँच केवल जानकारी के लिए है; पात्रता का निर्णय केवल संबंधित प्राधिकरण करता है। इस पहली सूची में चुनी हुई पूरे भारत की केंद्रीय योजनाएँ हैं और राज्य/केंद्र शासित प्रदेश की योजनाओं की सूची पूरी नहीं है। नियम और प्रक्रिया बदल सकते हैं। मौजूदा जानकारी आधिकारिक योजना स्रोत या संबंधित प्राधिकरण से पक्की करें।' },
-  aligned: { en: 'Reported answers align with published screening rules', hi: 'बताए गए जवाब प्रकाशित शुरुआती जाँच के नियमों से मेल खाते हैं' },
-  check: { en: 'More information or an official / path-specific check is needed', hi: 'और जानकारी या आधिकारिक / योजना-मार्ग की जाँच ज़रूरी है' },
-  notAligned: { en: 'One or more known screening conditions do not align', hi: 'एक या अधिक ज्ञात शुरुआती शर्तें मेल नहीं खातीं' },
-  viewDetails: { en: 'Scheme details', hi: 'योजना का विवरण' },
-  reviewAnswers: { en: 'Review answers', hi: 'जवाब देखें' },
-  restart: { en: 'Clear answers and start again', hi: 'जवाब मिटाकर फिर शुरू करें' },
-  continue: { en: 'Continue', hi: 'आगे बढ़ें' },
-  back: { en: 'Back', hi: 'पीछे' },
-  compare: { en: 'View screening results', hi: 'जाँच के नतीजे देखें' },
-  resultAligned: { en: 'Reported answers align with the published screening rules. The authority must still verify eligibility.', hi: 'बताए गए जवाब प्रकाशित शुरुआती जाँच के नियमों से मेल खाते हैं। पात्रता की पुष्टि फिर भी प्राधिकरण करेगा।' },
-  resultUnknown: { en: 'More information or an official / path-specific check is needed before this can be assessed.', hi: 'आकलन से पहले और जानकारी या आधिकारिक / योजना-मार्ग की जाँच ज़रूरी है।' },
-  resultFalse: { en: 'One or more known answers do not align with the published screening conditions. An authority makes the final decision.', hi: 'एक या अधिक ज्ञात जवाब प्रकाशित शुरुआती शर्तों से मेल नहीं खाते। अंतिम निर्णय प्राधिकरण करता है।' },
-  benefit: { en: 'Benefit described by the source', hi: 'स्रोत में बताया गया लाभ' },
-  eligibility: { en: 'Eligibility conditions and exclusions', hi: 'पात्रता की शर्तें और अपवर्जन' },
-  documents: { en: 'Application-document notes', hi: 'आवेदन-दस्तावेज़ संबंधी जानकारी' },
-  notes: { en: 'Important caveats', hi: 'ज़रूरी सावधानियाँ' },
-  source: { en: 'Official source', hi: 'आधिकारिक स्रोत' },
-  sourceEvidence: { en: 'Quoted source evidence', hi: 'स्रोत से उद्धरण' },
-  checked: { en: 'Source checked', hi: 'स्रोत जाँचने की तारीख' },
-  officialNext: { en: 'Official application / check', hi: 'आधिकारिक आवेदन / जाँच' },
-  prepTitle: { en: 'A note for your official conversation', hi: 'आधिकारिक बातचीत के लिए एक नोट' },
-  prepText: { en: 'These points come from the scheme record’s application-document notes and important notes. They are not a definitive document checklist; confirm what applies with the official source.', hi: 'ये बिंदु योजना रिकॉर्ड की आवेदन-दस्तावेज़ संबंधी जानकारी और ज़रूरी सावधानियों से लिए गए हैं। यह अंतिम दस्तावेज़ सूची नहीं है; आधिकारिक स्रोत से पुष्टि करें।' },
+  appName: { en: 'SchemeSaathi', hi: 'स्कीमसाथी (SchemeSaathi)' },
+  tagline: {
+    en: 'Verified portal schemes for Maharashtra (MahaDBT) and Central Government with direct registration & application links.',
+    hi: 'महाराष्ट्र महाडीबीटी (MahaDBT) आणि केंद्र सरकारच्या अधिकृत योजना, थेट नोंदणी व अर्जाच्या लिंकसह.',
+  },
+  tabDirectory: { en: 'Explore All Schemes', hi: 'सर्व योजना शोधा (Directory)' },
+  tabChecker: { en: 'Quick Eligibility Check', hi: 'झटपट पात्रता तपासा (Eligibility)' },
+  tabWizard: { en: 'Guided Assistant', hi: 'मार्गदर्शित सहाय्यक (Wizard)' },
+  searchPlaceholder: {
+    en: 'Search schemes by name, department, or keyword (e.g., EBC, tractor, scholarship, ladki bahin, hostel, drip)...',
+    hi: 'योजनेचे नाव, विभाग किंवा विषय शोधा (उदा. ईबीसी, ट्रॅक्टर, शिष्यवृत्ती, लाडकी बहीण, वसतिगृह, ठिबक)...',
+  },
+  allPortals: { en: 'All Portals', hi: 'सर्व पोर्टल्स' },
+  mahadbtPortal: { en: 'MahaDBT (Maharashtra)', hi: 'महाडीबीटी (महाराष्ट्र)' },
+  centralPortal: { en: 'Central Govt (NSP/PM)', hi: 'केंद्रीय योजना (NSP/PM)' },
+  statePortal: { en: 'State Welfare', hi: 'राज्य कल्याणकारी योजना' },
+  allCategories: { en: 'All Categories', hi: 'सर्व प्रवर्ग' },
+  allAreas: { en: 'All Support Areas', hi: 'सर्व क्षेत्र' },
+  filterByPortal: { en: 'Portal', hi: 'पोर्टल' },
+  filterByArea: { en: 'Area', hi: 'क्षेत्र' },
+  filterByCaste: { en: 'Category', hi: 'जात प्रवर्ग' },
+  schemesFound: { en: 'Schemes Available', hi: 'उपलब्ध योजना' },
+  applyOnPortal: { en: 'Apply / Login', hi: 'अर्ज करा / लॉगिन' },
+  registerOnPortal: { en: 'Register to Apply', hi: 'नवीन नोंदणी करा' },
+  viewDetails: { en: 'View Details & Documents', hi: 'सविस्तर माहिती व कागदपत्रे' },
+  benefit: { en: 'Financial & Scheme Benefit', hi: 'आर्थिक व योजना लाभ' },
+  eligibility: { en: 'Eligibility & Criteria', hi: 'पात्रता आणि निकष' },
+  documents: { en: 'Required Documents for Application', hi: 'अर्जासाठी आवश्यक कागदपत्रे' },
+  notes: { en: 'Important Guidelines & Warnings', hi: 'महत्त्वाच्या सूचना व नियम' },
+  source: { en: 'Official Source & Resolution', hi: 'अधिकृत शासकीय स्रोत व शासन निर्णय' },
+  sourceEvidence: { en: 'Official Quoted Evidence', hi: 'शासकीय संदर्भातील मूळ मजकूर' },
+  checked: { en: 'Verified on', hi: 'सत्यापित दिनांक' },
+  prepTitle: { en: 'Application Preparation Checklist', hi: 'अर्ज पूर्वतयारी आणि कागदपत्र यादी' },
+  prepText: {
+    en: 'Use this checklist to gather all required original documents and certificates before opening the MahaDBT or official portal.',
+    hi: 'महाडीबीटी किंवा अधिकृत पोर्टलवर अर्ज भरण्यापूर्वी हे सर्व मूळ दाखले व कागदपत्रे सोबत तयार ठेवा.',
+  },
+  aligned: { en: 'Eligible / Criteria Aligned', hi: 'पात्र / निकषांनुसार योग्य' },
+  check: { en: 'Verification / Specific Path Check Needed', hi: 'तपासणी / अटींची खात्री आवश्यक' },
+  notAligned: { en: 'Not Aligned with Criteria', hi: 'शर्तींनुसार अपात्र' },
+  backToSchemes: { en: 'Back to Schemes', hi: 'योजना यादीकडे परत' },
+  back: { en: 'Back', hi: 'मागे' },
+  continue: { en: 'Continue', hi: 'पुढे जा' },
+  restart: { en: 'Reset Filters / Profile', hi: 'रीसेट करा' },
+  printNote: { en: 'Print / Save as PDF', hi: 'प्रिंट / PDF सेव्ह करा' },
+  shareNote: { en: 'Copy Document Checklist', hi: 'कागदपत्र यादी कॉपी करा' },
+  caveatTitle: { en: 'Official Disclaimer', hi: 'अधिकृत सूचना' },
+  caveat: {
+    en: 'SchemeSaathi is an independent informational guide. Always register and apply on the official government portals (mahadbt.maharashtra.gov.in, scholarships.gov.in, pmkisan.gov.in). Never share confidential passwords or OTPs.',
+    hi: 'स्कीमसाथी ही मार्गदर्शक माहिती प्रणाली आहे. नेहमी अधिकृत सरकारी पोर्टलवरच (mahadbt.maharashtra.gov.in) नोंदणी व अर्ज करा. कोणाशीही पासवर्ड किंवा ओटीपी शेअर करू नका.',
+  },
 };
 
-const questionOrder = Object.keys(options) as Field[];
-const categoryName = (value: string | null, language: Language) => value === 'all'
-  ? copy.allAreas[language]
-  : supportAreas.find((area) => area.value === value)?.[language] ?? value ?? '';
 const localized = (value: Localized, language: Language) => value[language];
 
-function App() {
-  const [screen, setScreen] = useState<Screen>('language');
-  const [language, setLanguage] = useState<Language>('en');
-  const [mode, setMode] = useState<Mode>('self');
-  const [profile, setProfile] = useState<Profile>({ ...initialProfile });
-  const [skipped, setSkipped] = useState<Set<Field>>(new Set());
-  const [questionFields, setQuestionFields] = useState<Field[]>([]);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [selectedScheme, setSelectedScheme] = useState<Scheme | null>(null);
-  const [voiceMessage, setVoiceMessage] = useState('');
-  const t = (key: string) => localized(copy[key], language);
-  const hindi = language === 'hi';
-  const selectedSchemes = useMemo(() => schemes.filter((scheme) => profile.category === 'all' || scheme.category === profile.category), [profile.category]);
-  const results = useMemo(() => selectedSchemes.map((scheme) => ({ scheme, result: getSchemeResult(scheme, profile) })), [selectedSchemes, profile]);
-  const currentField = questionFields[questionIndex];
-  const currentOptions = currentField ? options[currentField] ?? [] : [];
-  const groups: Record<Truth, typeof results> = {
-    true: results.filter(({ result }) => result === true),
-    unknown: results.filter(({ result }) => result === 'unknown'),
-    false: results.filter(({ result }) => result === false),
-  };
-  const unsupportedVoice = typeof window !== 'undefined' && !('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
-  const flowSteps: { key: Screen; en: string; hi: string }[] = [
-    { key: 'language', en: 'Language', hi: 'भाषा' },
-    { key: 'mode', en: 'How to use', hi: 'तरीका' },
-    { key: 'privacy', en: 'Privacy', hi: 'गोपनीयता' },
-    { key: 'category', en: 'Support area', hi: 'सहायता क्षेत्र' },
-    { key: 'questions', en: 'Questions', hi: 'सवाल' },
-    { key: 'review', en: 'Review', hi: 'जवाब देखें' },
-    { key: 'results', en: 'Results', hi: 'नतीजे' },
-  ];
-  const stepIndex = Math.max(0, flowSteps.findIndex((step) => step.key === screen));
-  const progress = screen === 'language' ? 0 : Math.round(stepIndex / (flowSteps.length - 1) * 100);
+const casteChoices = [
+  { value: 'all', label: { en: 'All Categories', hi: 'सर्व प्रवर्ग' } },
+  { value: 'OPEN', label: { en: 'Open / EBC', hi: 'खुला / ईबीसी' } },
+  { value: 'OBC', label: { en: 'OBC', hi: 'इतर मागास वर्ग (OBC)' } },
+  { value: 'SC', label: { en: 'SC', hi: 'अनुसूचित जाती (SC)' } },
+  { value: 'ST', label: { en: 'ST', hi: 'अनुसूचित जमाती (ST)' } },
+  { value: 'VJNT', label: { en: 'VJNT / NT', hi: 'विजाभज (VJNT/NT)' } },
+  { value: 'SBC', label: { en: 'SBC', hi: 'विशेष मागास प्रवर्ग (SBC)' } },
+  { value: 'MINORITY', label: { en: 'Minority', hi: 'अल्पसंख्याक' } },
+];
 
-  function setAnswer(field: Field, value: string | null) {
-    setProfile((previous) => ({ ...previous, [field]: value }));
-  }
-  function relevantSchemes(next: Profile) {
-    return schemes.filter((scheme) => next.category === 'all' || scheme.category === next.category);
-  }
-  function prepareQuestions(next: Profile, skippedFields: Set<Field>) {
-    const needed = new Set<Field>();
-    relevantSchemes(next).forEach((scheme) => {
-      if (evaluate(scheme.rule as Rule, next) === 'unknown') {
-        unresolvedFields(scheme.rule, next).forEach((field) => needed.add(field));
+export default function App() {
+  const [language, setLanguage] = useState<Language>('en');
+  const [viewTab, setViewTab] = useState<ViewTab>('directory');
+  const [appScreen, setAppScreen] = useState<AppScreen>('main');
+  const [wizardScreen, setWizardScreen] = useState<WizardScreen>('category');
+  const [selectedScheme, setSelectedScheme] = useState<Scheme | null>(null);
+
+  // Search & Filtering State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [portalFilter, setPortalFilter] = useState<'all' | 'mahadbt' | 'central' | 'state'>('all');
+  const [areaFilter, setAreaFilter] = useState<string>('all');
+  const [casteFilter, setCasteFilter] = useState<string>('all');
+
+  // Quick Eligibility Profile State
+  const [quickProfile, setQuickProfile] = useState<Profile>({
+    ...initialProfile,
+    mahadbtDomicile: 'yes',
+    casteCategory: 'open',
+    annualIncome: '2.5-to-8',
+    occupationStatus: 'student-technical',
+    farmerLandholder: 'no',
+    ageBand: '18-39',
+  });
+  const [showEligibleOnly, setShowEligibleOnly] = useState(false);
+
+  // Guided Wizard State
+  const [wizardProfile, setWizardProfile] = useState<Profile>({ ...initialProfile });
+  const [wizardFields, setWizardFields] = useState<Field[]>([]);
+  const [wizardIndex, setWizardIndex] = useState(0);
+  const [skippedFields, setSkippedFields] = useState<Set<Field>>(new Set());
+  const [voiceMessage, setVoiceMessage] = useState('');
+
+  // Checklist interactive state for details view
+  const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
+
+  const t = (key: string) => localized(copy[key] ?? { en: key, hi: key }, language);
+  const isHindi = language === 'hi';
+
+  // Instant Search & Filtering
+  const filteredSchemes = useMemo(() => {
+    return schemes.filter((scheme) => {
+      // Portal Filter
+      if (portalFilter !== 'all' && scheme.portal !== portalFilter) return false;
+
+      // Area Filter
+      if (areaFilter !== 'all' && scheme.category !== areaFilter) return false;
+
+      // Caste Filter
+      if (casteFilter !== 'all') {
+        const matchesCaste = scheme.casteCategories.includes(casteFilter) || scheme.casteCategories.includes('ALL');
+        if (!matchesCaste) return false;
       }
+
+      // Keyword Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const enTitle = scheme.title.en.toLowerCase();
+        const hiTitle = scheme.title.hi.toLowerCase();
+        const enDept = scheme.department.en.toLowerCase();
+        const hiDept = scheme.department.hi.toLowerCase();
+        const enBenefit = scheme.benefit.en.toLowerCase();
+        const hiBenefit = scheme.benefit.hi.toLowerCase();
+        const enSummary = scheme.summary.en.toLowerCase();
+        const hiSummary = scheme.summary.hi.toLowerCase();
+        const shortTitleEn = scheme.shortTitle.en.toLowerCase();
+        const shortTitleHi = scheme.shortTitle.hi.toLowerCase();
+
+        const match =
+          enTitle.includes(q) ||
+          hiTitle.includes(q) ||
+          enDept.includes(q) ||
+          hiDept.includes(q) ||
+          enBenefit.includes(q) ||
+          hiBenefit.includes(q) ||
+          enSummary.includes(q) ||
+          hiSummary.includes(q) ||
+          shortTitleEn.includes(q) ||
+          shortTitleHi.includes(q) ||
+          scheme.category.toLowerCase().includes(q);
+
+        if (!match) return false;
+      }
+
+      // Quick Eligibility Filter toggle
+      if (viewTab === 'checker' && showEligibleOnly) {
+        const res = getSchemeResult(scheme, quickProfile);
+        if (res !== true) return false;
+      }
+
+      return true;
     });
-    return questionOrder.filter((field) => needed.has(field) && !skippedFields.has(field));
-  }
-  function beginQuestions() {
-    const noneSkipped = new Set<Field>();
-    setSkipped(noneSkipped);
-    const fields = prepareQuestions(profile, noneSkipped);
-    setQuestionFields(fields);
-    setQuestionIndex(0);
-    setScreen(fields.length ? 'questions' : 'review');
-  }
-  function answerAndNext(value: string | null) {
-    if (!currentField) return;
-    const nextSkipped = new Set(skipped);
-    if (value === null) nextSkipped.add(currentField);
-    else nextSkipped.delete(currentField);
-    const nextProfile = { ...profile, [currentField]: value };
-    setSkipped(nextSkipped);
-    setProfile(nextProfile);
-    setVoiceMessage('');
-    const fields = prepareQuestions(nextProfile, nextSkipped);
-    setQuestionFields(fields);
-    if (fields.length) {
-      setQuestionIndex(0);
-    } else {
-      setQuestionIndex(0);
-      setScreen('review');
-    }
-  }
-  function editAnswer(field: Field) {
-    if (field === 'category') {
-      setScreen('category');
-      return;
-    }
-    const revised = { ...profile, [field]: null };
-    const nextSkipped = new Set(skipped);
-    nextSkipped.delete(field);
-    setProfile(revised);
-    setSkipped(nextSkipped);
-    const fields = prepareQuestions(revised, nextSkipped);
-    setQuestionFields(fields.includes(field) ? fields : [field, ...fields]);
-    setQuestionIndex(0);
-    setScreen('questions');
-  }
-  function startVoice() {
-    type SpeechResult = { transcript: string };
-    type SpeechEvent = { results: ArrayLike<ArrayLike<SpeechResult>> };
-    type SpeechRecognizer = { lang: string; onresult: (event: SpeechEvent) => void; onerror: () => void; start: () => void };
-    const speechWindow = window as Window & { SpeechRecognition?: new () => SpeechRecognizer; webkitSpeechRecognition?: new () => SpeechRecognizer };
-    const Constructor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!Constructor || !currentField) {
-      setVoiceMessage(hindi ? 'इस ब्राउज़र में आवाज़ से जवाब उपलब्ध नहीं है। नीचे दिए विकल्प चुनें।' : 'Voice answers are unavailable in this browser. Choose an option below.');
-      return;
-    }
-    setVoiceMessage(hindi ? 'सुन रहा है…' : 'Listening…');
-    const recognition = new Constructor();
-    recognition.lang = hindi ? 'hi-IN' : 'en-IN';
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.toLocaleLowerCase();
-      const match = currentOptions.find((option) => {
-        const label = option.label[language].toLocaleLowerCase();
-        return label.includes(transcript) || transcript.includes(label);
-      });
-      if (match) {
-        setVoiceMessage(`${hindi ? 'समझा:' : 'Heard:'} ${match.label[language]}`);
-        answerAndNext(match.value);
-      } else setVoiceMessage(hindi ? 'विकल्प समझ नहीं आया। कृपया सूची में से चुनें।' : 'I could not match that to an option. Please choose from the list.');
+  }, [portalFilter, areaFilter, casteFilter, searchQuery, viewTab, showEligibleOnly, quickProfile]);
+
+  // Checker evaluation groupings
+  const checkerResults = useMemo(() => {
+    return schemes.map((scheme) => ({
+      scheme,
+      result: getSchemeResult(scheme, quickProfile),
+    }));
+  }, [quickProfile]);
+
+  const checkerGroups = useMemo(() => {
+    return {
+      eligible: checkerResults.filter((item) => item.result === true),
+      check: checkerResults.filter((item) => item.result === 'unknown'),
+      notEligible: checkerResults.filter((item) => item.result === false),
     };
-    recognition.onerror = () => setVoiceMessage(hindi ? 'आवाज़ नहीं मिली। सूची से विकल्प चुनें।' : 'Voice input did not work. Please choose from the list.');
-    recognition.start();
-  }
-  function resetSession() {
-    if (!window.confirm(hindi ? 'सभी जवाब मिटाकर शुरुआत पर लौटें?' : 'Clear all answers and return to the beginning?')) return;
-    setProfile({ ...initialProfile });
-    setSkipped(new Set());
-    setScreen('language');
-    setMode('self');
-    setQuestionFields([]);
-    setQuestionIndex(0);
-    setSelectedScheme(null);
-    setVoiceMessage('');
-  }
-  function openDetails(scheme: Scheme) {
+  }, [checkerResults]);
+
+  function openSchemeDetail(scheme: Scheme) {
     setSelectedScheme(scheme);
-    setScreen('detail');
+    setCheckedDocs({});
+    setAppScreen('detail');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  function answerLabel(field: Field, value: string | null) {
-    if (!value) return t('skipped');
-    if (field === 'category') return categoryName(value, language);
-    return options[field]?.find((option) => option.value === value)?.label[language] ?? value;
+
+  function toggleDocCheck(index: number) {
+    setCheckedDocs((prev) => ({ ...prev, [index]: !prev[index] }));
   }
-  function openOfficial(url: string) {
-    window.open(url, '_blank', 'noopener,noreferrer');
+
+  function handleQuickChange(field: Field, val: string | null) {
+    setQuickProfile((prev) => ({ ...prev, [field]: val }));
   }
-  async function sharePrep() {
+
+  // Wizard flow helpers
+  function startWizard(cat: string) {
+    const nextProf = { ...initialProfile, category: cat };
+    setWizardProfile(nextProf);
+    const needed = new Set<Field>();
+    const rel = schemes.filter((s) => cat === 'all' || s.category === cat);
+    rel.forEach((s) => {
+      unresolvedFields(s.rule, nextProf).forEach((f) => needed.add(f));
+    });
+    const order = Object.keys(options) as Field[];
+    const qList = order.filter((f) => needed.has(f));
+    setWizardFields(qList);
+    setWizardIndex(0);
+    setSkippedFields(new Set());
+    setWizardScreen('questions');
+  }
+
+  function answerWizard(val: string | null) {
+    const cur = wizardFields[wizardIndex];
+    if (!cur) return;
+    setWizardProfile((prev) => ({ ...prev, [cur]: val }));
+    if (wizardIndex + 1 < wizardFields.length) {
+      setWizardIndex(wizardIndex + 1);
+    } else {
+      setWizardScreen('results');
+    }
+  }
+
+  const wizardResults = useMemo(() => {
+    const rel = schemes.filter((s) => wizardProfile.category === 'all' || s.category === wizardProfile.category);
+    return rel.map((s) => ({
+      scheme: s,
+      result: getSchemeResult(s, wizardProfile),
+    }));
+  }, [wizardProfile]);
+
+  async function shareDocumentChecklist() {
     if (!selectedScheme) return;
     const text = [
-      selectedScheme.title[language],
+      `Scheme: ${selectedScheme.title[language]}`,
+      `Department: ${selectedScheme.department[language]}`,
       '',
-      ...selectedScheme.applicationDocuments.map((item) => `• ${item[language]}`),
-      ...selectedScheme.importantNotes.map((item) => `• ${item[language]}`),
+      '--- REQUIRED DOCUMENTS FOR APPLICATION ---',
+      ...selectedScheme.applicationDocuments.map((doc, idx) => `${idx + 1}. ${doc[language]}`),
       '',
-      `${selectedScheme.sourceTitle}: ${selectedScheme.sourceUrl}`,
+      '--- DIRECT APPLICATION LINKS ---',
+      `Registration: ${selectedScheme.registrationUrl}`,
+      `Login & Apply: ${selectedScheme.applicationUrl}`,
+      `Official Source: ${selectedScheme.sourceUrl}`,
     ].join('\n');
+
     if (navigator.share) {
-      try { await navigator.share({ title: selectedScheme.title[language], text }); } catch { /* sharing dismissed */ }
+      try {
+        await navigator.share({ title: selectedScheme.title[language], text });
+      } catch {
+        /* share dismissed */
+      }
     } else if (navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(text);
-        window.alert(hindi ? 'नोट कॉपी किया गया।' : 'Note copied.');
-      } catch { window.alert(hindi ? 'कॉपी नहीं हो सका। प्रिंट विकल्प इस्तेमाल करें।' : 'Could not copy. Use the print option.'); }
-    } else window.alert(hindi ? 'शेयर सुविधा उपलब्ध नहीं है। प्रिंट विकल्प इस्तेमाल करें।' : 'Sharing is unavailable. Use the print option.');
+        alert(isHindi ? 'कागदपत्रांची यादी कॉपी केली आहे!' : 'Checklist copied to clipboard!');
+      } catch {
+        window.print();
+      }
+    } else {
+      window.print();
+    }
   }
 
-  return <div className="app-shell">
-    <header className="topbar">
-      <div className="brand" aria-label="SchemeSaathi"><span className="brand-mark" aria-hidden="true"><Sprout size={19} /></span><span>SchemeSaathi</span></div>
-      <div className="topbar-right">
-        <span className="privacy-pill"><ShieldCheck size={15} /><span className="privacy-label">{hindi ? 'जवाब इस सेशन में रहते हैं' : 'Answers stay in this session'}</span></span>
-        <button className="btn secondary small" type="button" data-testid="button-language-toggle" onClick={() => setLanguage(hindi ? 'en' : 'hi')} aria-label={hindi ? 'Switch to English' : 'हिंदी में बदलें'}><Languages size={15} /> {hindi ? 'EN' : 'हिंदी'}</button>
-      </div>
-    </header>
-    <main className="main-wrap"><div className="journey-grid">
-      <aside className="rail" aria-label={hindi ? 'यात्रा के चरण' : 'Journey steps'}>
-        <div className="rail-kicker">{hindi ? 'आपकी राह' : 'YOUR NEXT STEPS'}</div>
-        <div className="rail-title">{hindi ? 'एक बार में एक साफ़ कदम।' : 'Clear guidance, one step at a time.'}</div>
-        <div className="steps">{flowSteps.map((step, index) => {
-          const done = index < stepIndex;
-          return <div key={step.key} className={`step-row ${index === stepIndex ? 'active' : ''} ${done ? 'done' : ''}`} aria-current={index === stepIndex ? 'step' : undefined}><span className="step-dot">{done ? <Check size={13} /> : index + 1}</span><span>{hindi ? step.hi : step.en}</span></div>;
-        })}</div>
-        <div className="rail-note"><ShieldCheck size={16} />{hindi ? 'आपके जवाब इस पेज की मेमोरी से बाहर नहीं जाते।' : 'Your answers do not leave this page’s memory.'}</div>
-      </aside>
-      <section className="content" aria-live="polite"><div className="screen-card">
-        {screen === 'language' && <>
-          <div className="eyebrow">{hindi ? 'नमस्कार' : 'NAMASTE'}</div>
-          <h1 className="screen-title">{t('start')}</h1><p className="screen-copy">{t('intro')}</p>
-          <Caveat language={language} />
-          <div className="form-field"><div className="form-label">{t('language')}</div><div className="option-list">
-            {(['en', 'hi'] as Language[]).map((choice) => <button type="button" key={choice} className={`choice ${language === choice ? 'selected' : ''}`} data-testid={`choice-language-${choice}`} onClick={() => setLanguage(choice)}>
-              <span><span className="choice-title">{choice === 'en' ? 'English' : 'हिन्दी'}</span><span className="choice-desc">{choice === 'en' ? 'Continue in English' : 'हिन्दी में आगे बढ़ें'}</span></span><span className="choice-icon">{language === choice ? <Check size={17} /> : <ChevronRight size={17} />}</span>
-            </button>)}
-          </div></div>
-          <div className="actions"><button className="btn" data-testid="button-continue-language" onClick={() => setScreen('mode')}>{t('continue')} <ArrowRight size={17} /></button></div>
-        </>}
-        {screen === 'mode' && <>
-          <div className="eyebrow">{hindi ? 'पहला कदम' : 'A SMALL FIRST CHOICE'}</div><h1 className="screen-title">{t('modeTitle')}</h1><p className="screen-copy">{t('modeText')}</p>
-          <div className="option-list">{(['self', 'assisted'] as Mode[]).map((choice) => <button type="button" key={choice} className={`choice ${mode === choice ? 'selected' : ''}`} data-testid={`choice-mode-${choice}`} onClick={() => setMode(choice)}>
-            <span><span className="choice-title">{t(choice)}</span><span className="choice-desc">{t(choice === 'self' ? 'selfHint' : 'assistedHint')}</span></span><span className="choice-icon">{mode === choice ? <Check size={17} /> : <ChevronRight size={17} />}</span>
-          </button>)}</div>
-          {mode === 'assisted' && <div className="notice"><Volume2 size={18} /><div>{t('assistedHint')}</div></div>}
-          <Actions backLabel={t('back')} nextLabel={t('continue')} back={() => setScreen('language')} next={() => setScreen('privacy')} backTest="button-back-mode" nextTest="button-continue-mode" />
-        </>}
-        {screen === 'privacy' && <>
-          <div className="eyebrow">{hindi ? 'आपकी जानकारी' : 'YOUR INFORMATION'}</div><h1 className="screen-title">{t('privacyTitle')}</h1><p className="screen-copy">{t('privacyText')}</p>
-          <div className="notice"><ShieldCheck size={20} /><div><strong>{hindi ? 'पहचान या बैंक नंबर नहीं' : 'No identity or bank numbers'}</strong>{hindi ? 'SchemeSaathi में Aadhaar, बैंक खाता या पहचान नंबर न लिखें।' : 'Do not type Aadhaar, bank account or identity numbers into SchemeSaathi.'}</div></div>
-          <p className="screen-copy">{hindi ? 'कोई लॉगिन, ट्रैकिंग या नेटवर्क अनुरोध नहीं। आधिकारिक लिंक खोलने पर केवल सरकारी साइट से संपर्क होता है।' : 'No sign-in, tracking or network requests. An official link connects only to the government site.'}</p>
-          <Actions backLabel={t('back')} nextLabel={t('continue')} back={() => setScreen('mode')} next={() => setScreen('category')} backTest="button-back-privacy" nextTest="button-continue-privacy" />
-        </>}
-        {screen === 'category' && <>
-          <div className="eyebrow">{hindi ? 'किस पर ध्यान दें?' : 'CHOOSE A SUPPORT AREA'}</div><h1 className="screen-title">{t('categoryTitle')}</h1><p className="screen-copy">{t('categoryText')}</p>
-          <div className="option-list category-list">
-            {supportAreas.map((area, index) => <button type="button" key={area.value} className={`choice ${profile.category === area.value ? 'selected' : ''}`} data-testid={`choice-category-${area.value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`} onClick={() => setAnswer('category', area.value)}>
-              <span><span className="choice-title">{area[language]}</span><span className="choice-desc">{hindi ? `क्षेत्र ${String(index + 1).padStart(2, '0')}` : `Area ${String(index + 1).padStart(2, '0')}`}</span></span><span className="choice-icon">{profile.category === area.value ? <Check size={17} /> : <ChevronRight size={17} />}</span>
-            </button>)}
-            <button type="button" className={`choice ${profile.category === 'all' ? 'selected' : ''}`} data-testid="choice-category-all" onClick={() => setAnswer('category', 'all')}>
-              <span><span className="choice-title">{t('allAreas')}</span><span className="choice-desc">{t('allDesc')}</span></span><span className="choice-icon">{profile.category === 'all' ? <Check size={17} /> : <CircleHelp size={17} />}</span>
-            </button>
+  return (
+    <div className="app-shell">
+      {/* Top Header */}
+      <header className="topbar">
+        <div className="brand" aria-label="SchemeSaathi">
+          <span className="brand-mark" aria-hidden="true">
+            <Sprout size={20} />
+          </span>
+          <div>
+            <div style={{ lineHeight: 1 }}>{t('appName')}</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
+              MahaDBT & Central Schemes Portal
+            </div>
           </div>
-          <Actions backLabel={t('back')} nextLabel={t('continue')} back={() => setScreen('privacy')} next={beginQuestions} disabled={!profile.category} backTest="button-back-category" nextTest="button-continue-category" />
-        </>}
-        {screen === 'questions' && currentField && <>
-          <div className="eyebrow">{hindi ? 'सिर्फ संबंधित सवाल' : 'ONLY RELEVANT QUESTIONS'}</div>
-          <div className="question-count" data-testid="text-question-progress">{hindi ? `सवाल ${questionIndex + 1} / ${questionFields.length}` : `QUESTION ${questionIndex + 1} OF ${questionFields.length}`}</div>
-          <div className="progress-track"><div className="progress-fill" style={{ width: `${(questionIndex + 1) / Math.max(1, questionFields.length) * 100}%` }} /></div>
-          <h1 className="screen-title question-title">{fieldLabels[currentField][language]}</h1>
-          <p className="screen-copy">{questionHelp[currentField][language]}</p>
-          {mode === 'assisted' && <div className="voice-note"><Volume2 size={14} />{t('assistedHint')}</div>}
-          <div className="option-list">{currentOptions.map((option) => <button type="button" key={option.value} className={`choice ${profile[currentField] === option.value ? 'selected' : ''}`} data-testid={`choice-answer-${currentField}-${option.value}`} onClick={() => answerAndNext(option.value)}>
-            <span><span className="choice-title">{option.label[language]}</span>{option.description && <span className="choice-desc">{option.description[language]}</span>}</span><span className="choice-icon">{profile[currentField] === option.value ? <Check size={17} /> : <ChevronRight size={17} />}</span>
-          </button>)}<button type="button" className={`choice ${profile[currentField] === null ? 'selected' : ''}`} data-testid={`choice-answer-${currentField}-unknown`} onClick={() => answerAndNext(null)}><span className="choice-title">{t('unknown')}</span><span className="choice-icon"><CircleHelp size={17} /></span></button></div>
-          <div className="voice-note" role="status" data-testid="status-voice">{voiceMessage || (unsupportedVoice ? (hindi ? 'इस ब्राउज़र में आवाज़ से जवाब उपलब्ध नहीं है। ऊपर के विकल्प चुनें।' : 'Voice input is unavailable in this browser. Use the choices above.') : (hindi ? 'चाहें तो सूची में से कोई विकल्प बोलें।' : 'If you prefer, say one of the listed options.'))}</div>
-          {!unsupportedVoice && <button className="btn secondary small voice-button" type="button" data-testid="button-voice-input" onClick={startVoice}><Mic size={15} />{hindi ? 'आवाज़ से जवाब' : 'Answer by voice'}</button>}
-          <div className="actions"><button className="btn secondary" type="button" data-testid="button-back-questions" onClick={() => setScreen('category')}><ArrowLeft size={16} /> {t('back')}</button><button className="btn text" type="button" data-testid="button-skip-question" onClick={() => answerAndNext(null)}>{hindi ? 'इस सवाल को छोड़ें' : 'Skip this question'} <ArrowRight size={16} /></button></div>
-        </>}
-        {screen === 'review' && <>
-          <div className="eyebrow">{hindi ? 'जाँच से पहले' : 'BEFORE SCREENING'}</div><h1 className="screen-title">{t('reviewTitle')}</h1><p className="screen-copy">{t('reviewText')}</p>
-          <div className="review-row" data-testid="review-answer-category"><span>{fieldLabels.category[language]}</span><strong>{categoryName(profile.category, language)}</strong><button type="button" className="link-button" data-testid="button-edit-category" onClick={() => setScreen('category')}>{hindi ? 'बदलें' : 'Change'}</button></div>
-          {questionOrder.filter((field) => profile[field] !== null || skipped.has(field)).map((field) => <div className="review-row" key={field} data-testid={`review-answer-${field}`}>
-            <span>{fieldLabels[field][language]}</span><strong>{answerLabel(field, profile[field])}</strong><button type="button" className="link-button" aria-label={`${hindi ? 'बदलें' : 'Change'} ${fieldLabels[field][language]}`} data-testid={`button-edit-${field}`} onClick={() => editAnswer(field)}>{hindi ? 'बदलें' : 'Change'}</button>
-          </div>)}
-          <Caveat language={language} />
-          <Actions backLabel={t('back')} nextLabel={t('compare')} back={() => setScreen('category')} next={() => setScreen('results')} backTest="button-back-review" nextTest="button-show-results" />
-        </>}
-        {screen === 'results' && <>
-          <div className="result-head"><div><div className="eyebrow">{hindi ? 'आपके जवाबों के आधार पर' : 'BASED ON YOUR ANSWERS'}</div><h1 className="screen-title">{t('resultsTitle')}</h1><p className="screen-copy">{t('resultsText')}</p></div><span className="badge">{hindi ? 'जानकारी के लिए' : 'INFORMATION ONLY'}</span></div>
-          <Caveat language={language} />
-          <div className="result-groups">{([
-            { key: true as Truth, title: t('aligned'), mark: 'yes' },
-            { key: 'unknown' as Truth, title: t('check'), mark: 'unknown' },
-            { key: false as Truth, title: t('notAligned'), mark: 'no' },
-          ]).map((group) => <section key={String(group.key)} data-testid={`result-group-${String(group.key)}`}>
-            <h2 className="group-heading"><span className={`group-mark ${group.mark}`} />{group.title}<span className="group-count">({groups[group.key].length})</span></h2>
-            {groups[group.key].length ? groups[group.key].map(({ scheme, result }) => <ResultCard key={scheme.id} scheme={scheme} result={result} onOpen={() => openDetails(scheme)} language={language} />)
-              : <div className="empty-state" data-testid={`empty-group-${String(group.key)}`}>{hindi ? 'इस स्थिति में कोई योजना नहीं।' : 'No schemes in this status.'}</div>}
-          </section>)}</div>
-          <div className="actions"><button className="btn secondary" type="button" data-testid="button-review-answers" onClick={() => setScreen('review')}><ArrowLeft size={16} /> {t('reviewAnswers')}</button><button className="btn text" type="button" data-testid="button-reset-results" onClick={resetSession}><RotateCcw size={15} /> {t('restart')}</button></div>
-        </>}
-        {screen === 'detail' && selectedScheme && <>
-          <div className="eyebrow">{selectedScheme.category} · {selectedScheme.shortTitle[language]}</div>
-          <h1 className="screen-title">{selectedScheme.title[language]}</h1><p className="screen-copy">{selectedScheme.summary[language]}</p>
-          <div className={`status-panel status-${groups.true.some((item) => item.scheme.id === selectedScheme.id) ? 'yes' : groups.false.some((item) => item.scheme.id === selectedScheme.id) ? 'no' : 'unknown'}`} data-testid={`status-scheme-${selectedScheme.id}`}>
-            <strong>{resultTitle(getSchemeResult(selectedScheme, profile), language)}</strong>
-            <p>{resultDescription(getSchemeResult(selectedScheme, profile), language)}</p>
+        </div>
+
+        <div className="topbar-right">
+          <span className="privacy-pill">
+            <ShieldCheck size={15} />
+            <span className="privacy-label">
+              {isHindi ? 'थेट अधिकृत सरकारी लिंक' : 'Direct Official Govt Links'}
+            </span>
+          </span>
+          <button
+            className="btn secondary small"
+            type="button"
+            data-testid="button-language-toggle"
+            onClick={() => setLanguage(isHindi ? 'en' : 'hi')}
+            aria-label="Toggle language"
+          >
+            <Languages size={15} /> {isHindi ? 'English' : 'मराठी / हिंदी'}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="main-wrap">
+        {/* DETAIL SCREEN */}
+        {appScreen === 'detail' && selectedScheme && (
+          <div className="screen-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <button
+                type="button"
+                className="btn secondary small"
+                onClick={() => setAppScreen('main')}
+              >
+                <ArrowLeft size={15} /> {t('backToSchemes')}
+              </button>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <span className={`portal-badge ${selectedScheme.portal}`}>
+                  {selectedScheme.portal === 'mahadbt' ? 'MahaDBT Maharashtra' : selectedScheme.portal === 'central' ? 'Central Govt (NSP)' : 'Maharashtra State'}
+                </span>
+                <span className="mini-tag">{selectedScheme.category}</span>
+              </div>
+            </div>
+
+            <div className="eyebrow">{selectedScheme.department[language]}</div>
+            <h1 className="screen-title" style={{ marginTop: 6, fontSize: 'clamp(26px, 3.5vw, 36px)' }}>
+              {selectedScheme.title[language]}
+            </h1>
+            <p className="screen-copy">{selectedScheme.summary[language]}</p>
+
+            {/* DIRECT ACTION BUTTONS (MahaDBT Apply & Register) */}
+            <div style={{ margin: '24px 0', padding: '20px', background: 'hsl(var(--muted) / .6)', borderRadius: 16, border: '1px solid hsl(var(--border))' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em', color: 'hsl(var(--foreground))' }}>
+                {isHindi ? 'थेट अधिकृत अर्ज व नोंदणी लिंक (Official Links)' : 'DIRECT OFFICIAL APPLICATION & REGISTRATION LINKS'}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <a
+                  className="btn"
+                  href={selectedScheme.applicationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <ExternalLink size={16} /> {selectedScheme.applicationLabel[language]}
+                </a>
+
+                {selectedScheme.registrationUrl && (
+                  <a
+                    className="btn secondary"
+                    href={selectedScheme.registrationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <UserPlus size={16} /> {selectedScheme.registrationLabel?.[language] ?? t('registerOnPortal')}
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setAppScreen('prep')}
+                >
+                  <ClipboardList size={16} /> {t('prepTitle')}
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 10 }}>
+                {isHindi
+                  ? 'टीप: नवीन अर्जदारांनी प्रथम "नवीन नोंदणी" करावी आणि नंतर युजरनेम/पासवर्डने "लॉगिन करून अर्ज" करावा.'
+                  : 'Note: First-time applicants must complete "New Registration", then use their login credentials to apply.'}
+              </div>
+            </div>
+
+            {/* Benefits Block */}
+            <section className="detail-block">
+              <h3>{t('benefit')}</h3>
+              <p className="benefit-copy" style={{ fontWeight: 600, color: 'hsl(var(--primary))' }}>
+                {selectedScheme.benefit[language]}
+              </p>
+            </section>
+
+            {/* Eligibility Block */}
+            <section className="detail-block">
+              <h3>{t('eligibility')}</h3>
+              <ul>
+                {selectedScheme.eligibility.map((item, index) => (
+                  <li key={index} style={{ marginBottom: 6 }}>{item[language]}</li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Interactive Documents Checklist */}
+            <section className="detail-block">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <h3>{t('documents')}</h3>
+                <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
+                  {isHindi ? 'तुमच्याकडे तयार असलेली कागदपत्रे टिक करा:' : 'Tick off ready documents:'}
+                </span>
+              </div>
+              <ul className="interactive-checklist">
+                {selectedScheme.applicationDocuments.map((doc, index) => (
+                  <li
+                    key={index}
+                    className={`checklist-item ${checkedDocs[index] ? 'checked' : ''}`}
+                    onClick={() => toggleDocCheck(index)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!checkedDocs[index]}
+                      onChange={() => toggleDocCheck(index)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span>{doc[language]}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Important Notes */}
+            <section className="detail-block">
+              <h3>{t('notes')}</h3>
+              <ul>
+                {selectedScheme.importantNotes.map((note, index) => (
+                  <li key={index} style={{ marginBottom: 6 }}>{note[language]}</li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Official Source */}
+            <section className="source-panel" style={{ marginTop: 24, padding: 18, borderRadius: 12, background: 'hsl(var(--muted) / .4)', border: '1px solid hsl(var(--border))' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{t('source')}</div>
+              <p style={{ margin: '4px 0 8px', fontSize: 14 }}><strong>{selectedScheme.sourceTitle}</strong></p>
+              <a
+                className="source-link"
+                href={selectedScheme.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'hsl(var(--primary))' }}
+              >
+                {selectedScheme.sourceUrl} <ExternalLink size={13} />
+              </a>
+              <blockquote style={{ margin: '12px 0 6px', paddingLeft: 12, borderLeft: '3px solid hsl(var(--primary))', fontStyle: 'italic', color: 'hsl(var(--muted-foreground))' }}>
+                {selectedScheme.sourceQuote}
+              </blockquote>
+              <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 8 }}>
+                <strong>{t('checked')}:</strong> {selectedScheme.checkedAt}
+              </div>
+            </section>
+
+            <div className="actions" style={{ marginTop: 28 }}>
+              <a
+                className="btn"
+                href={selectedScheme.applicationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}
+              >
+                {selectedScheme.applicationLabel[language]} <ExternalLink size={16} />
+              </a>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setAppScreen('main')}
+              >
+                <ArrowLeft size={15} /> {t('backToSchemes')}
+              </button>
+            </div>
           </div>
-          <section className="detail-block"><h2>{t('benefit')}</h2><p className="benefit-copy">{selectedScheme.benefit[language]}</p></section>
-          <section className="detail-block"><h2>{t('eligibility')}</h2><ul>{selectedScheme.eligibility.map((item, index) => <li key={index} data-testid={`eligibility-${selectedScheme.id}-${index}`}>{item[language]}</li>)}</ul></section>
-          <section className="detail-block"><h2>{t('documents')}</h2><ul>{selectedScheme.applicationDocuments.map((item, index) => <li key={index}>{item[language]}</li>)}</ul></section>
-          <section className="detail-block"><h2>{t('notes')}</h2><ul>{selectedScheme.importantNotes.map((item, index) => <li key={index}>{item[language]}</li>)}</ul></section>
-          <section className="source-panel" data-testid={`source-details-${selectedScheme.id}`}>
-            <h2>{t('source')}</h2><p><strong>{selectedScheme.sourceTitle}</strong></p>
-            <a className="source-link" href={selectedScheme.sourceUrl} target="_blank" rel="noopener noreferrer" data-testid={`link-source-${selectedScheme.id}`}>{selectedScheme.sourceUrl}<ExternalLink size={14} /></a>
-            <h3>{t('sourceEvidence')}</h3><blockquote>{selectedScheme.sourceQuote}</blockquote>
-            <p className="checked-date"><strong>{t('checked')}:</strong> <time dateTime={selectedScheme.checkedAt}>{selectedScheme.checkedAt}</time></p>
-          </section>
-          <a className="btn official-link" href={selectedScheme.applicationUrl} target="_blank" rel="noopener noreferrer" data-testid={`link-application-${selectedScheme.id}`}>{selectedScheme.applicationLabel[language]} <ExternalLink size={16} /></a>
-          <div className="actions"><button className="btn secondary" type="button" data-testid="button-view-prep" onClick={() => setScreen('prep')}><ClipboardList size={17} /> {hindi ? 'तैयारी नोट' : 'Preparation note'}</button><button className="btn text" type="button" data-testid="button-back-results-detail" onClick={() => setScreen('results')}><ArrowLeft size={16} /> {hindi ? 'नतीजों पर लौटें' : 'Back to results'}</button></div>
-        </>}
-        {screen === 'prep' && selectedScheme && <>
-          <div className="eyebrow">{hindi ? 'प्रिंट या साथ साझा करें' : 'PRINT OR TAKE ALONG'}</div><h1 className="screen-title">{t('prepTitle')}</h1><p className="screen-copy">{selectedScheme.title[language]}</p>
-          <div className="notice"><AlertCircle size={18} /><div>{t('prepText')}</div></div>
-          <section className="detail-block"><h2>{t('documents')}</h2><ul>{selectedScheme.applicationDocuments.map((item, index) => <li key={index}>{item[language]}</li>)}</ul></section>
-          <section className="detail-block"><h2>{t('notes')}</h2><ul>{selectedScheme.importantNotes.map((item, index) => <li key={index}>{item[language]}</li>)}</ul></section>
-          <p className="form-hint">{selectedScheme.sourceTitle} · {selectedScheme.checkedAt}</p>
-          <div className="actions no-print"><button className="btn secondary" type="button" data-testid="button-print-prep" onClick={() => window.print()}><Printer size={16} /> {hindi ? 'प्रिंट / PDF' : 'Print / save as PDF'}</button><button className="btn secondary" type="button" data-testid="button-share-prep" onClick={sharePrep}><ClipboardList size={16} /> {hindi ? 'नोट साझा / कॉपी करें' : 'Share / copy note'}</button></div>
-          <div className="actions"><button className="btn secondary" type="button" data-testid="button-back-prep" onClick={() => setScreen('detail')}><ArrowLeft size={16} /> {hindi ? 'योजना विवरण पर लौटें' : 'Back to scheme details'}</button></div>
-        </>}
-      </div><div className="session-footer">
-        <span>{screen === 'language' ? (hindi ? 'कोई खाता नहीं • जवाब इस सेशन में' : 'No account • Session-only answers') : `${progress}% ${hindi ? 'पूरा' : 'complete'}`}</span>
-        {screen !== 'language' && <button type="button" data-testid="button-clear-session" onClick={resetSession}>{t('restart')}</button>}
-      </div></section>
-    </div></main>
-  </div>;
-}
+        )}
 
-function Actions({ backLabel, nextLabel, back, next, disabled = false, backTest, nextTest }: { backLabel: string; nextLabel: string; back: () => void; next: () => void; disabled?: boolean; backTest: string; nextTest: string }) {
-  return <div className="actions"><button className="btn secondary" type="button" data-testid={backTest} onClick={back}><ArrowLeft size={16} /> {backLabel}</button><button className="btn" type="button" disabled={disabled} data-testid={nextTest} onClick={next}>{nextLabel} <ArrowRight size={17} /></button></div>;
-}
+        {/* PREPARATION NOTE SCREEN */}
+        {appScreen === 'prep' && selectedScheme && (
+          <div className="screen-card">
+            <div className="eyebrow">{isHindi ? 'प्रिंट किंवा सेतू केंद्रासाठी प्रत' : 'PRINT OR TAKE TO SETU KENDRA'}</div>
+            <h1 className="screen-title">{t('prepTitle')}</h1>
+            <p className="screen-copy">{selectedScheme.title[language]}</p>
 
-function Caveat({ language }: { language: Language }) {
-  return <div className="notice caveat" data-testid="notice-official-caveat"><AlertCircle size={19} /><div><strong>{copy.caveatTitle[language]}</strong>{copy.caveat[language]}</div></div>;
-}
+            <div className="notice">
+              <AlertCircle size={18} />
+              <div>{t('prepText')}</div>
+            </div>
 
-function ResultCard({ scheme, result, onOpen, language }: { scheme: Scheme; result: Truth; onOpen: () => void; language: Language }) {
-  return <article className="result-card" data-testid={`card-result-${scheme.id}`}>
-    <div className="result-card-top"><div><h3>{scheme.title[language]}</h3><p>{scheme.summary[language]}</p></div><button type="button" className="link-button" data-testid={`button-open-${scheme.id}`} onClick={onOpen}>{copy.viewDetails[language]} <ChevronRight size={14} /></button></div>
-    <p className="result-explanation">{resultDescription(result, language)}</p>
-  </article>;
-}
+            <section className="detail-block">
+              <h3>{t('documents')}</h3>
+              <ul>
+                {selectedScheme.applicationDocuments.map((doc, idx) => (
+                  <li key={idx} style={{ marginBottom: 6 }}>{doc[language]}</li>
+                ))}
+              </ul>
+            </section>
 
-function resultTitle(result: Truth, language: Language) {
-  if (result === true) return copy.aligned[language];
-  if (result === false) return copy.notAligned[language];
-  return copy.check[language];
-}
+            <section className="detail-block">
+              <h3>{t('notes')}</h3>
+              <ul>
+                {selectedScheme.importantNotes.map((note, idx) => (
+                  <li key={idx} style={{ marginBottom: 6 }}>{note[language]}</li>
+                ))}
+              </ul>
+            </section>
 
-function resultDescription(result: Truth, language: Language) {
-  if (result === true) return copy.resultAligned[language];
-  if (result === false) return copy.resultFalse[language];
-  return copy.resultUnknown[language];
-}
+            <div style={{ marginTop: 20, padding: 16, background: 'hsl(var(--muted) / .5)', borderRadius: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{isHindi ? 'पोर्टल लिंक:' : 'Official Portal Links:'}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                <strong>{t('registerOnPortal')}:</strong> {selectedScheme.registrationUrl}
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                <strong>{t('applyOnPortal')}:</strong> {selectedScheme.applicationUrl}
+              </div>
+            </div>
 
-export default App;
+            <div className="actions no-print" style={{ marginTop: 24 }}>
+              <button type="button" className="btn secondary" onClick={() => window.print()}>
+                <Printer size={16} /> {t('printNote')}
+              </button>
+              <button type="button" className="btn secondary" onClick={shareDocumentChecklist}>
+                <ClipboardList size={16} /> {t('shareNote')}
+              </button>
+              <button type="button" className="btn secondary" onClick={() => setAppScreen('detail')}>
+                <ArrowLeft size={16} /> {t('back')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* MAIN SCREEN (TABS: DIRECTORY | CHECKER | WIZARD) */}
+        {appScreen === 'main' && (
+          <div>
+            {/* Navigation Tabs */}
+            <nav className="top-nav" aria-label="Main navigation">
+              <button
+                type="button"
+                className={`nav-tab-btn ${viewTab === 'directory' ? 'active' : ''}`}
+                onClick={() => setViewTab('directory')}
+              >
+                <Search size={15} /> {t('tabDirectory')}
+              </button>
+              <button
+                type="button"
+                className={`nav-tab-btn ${viewTab === 'checker' ? 'active' : ''}`}
+                onClick={() => setViewTab('checker')}
+              >
+                <Sparkles size={15} /> {t('tabChecker')}
+              </button>
+              <button
+                type="button"
+                className={`nav-tab-btn ${viewTab === 'wizard' ? 'active' : ''}`}
+                onClick={() => setViewTab('wizard')}
+              >
+                <UserCheck size={15} /> {t('tabWizard')}
+              </button>
+            </nav>
+
+            {/* TAB 1: ALL SCHEMES DIRECTORY */}
+            {viewTab === 'directory' && (
+              <div>
+                <div style={{ marginBottom: 20 }}>
+                  <h1 className="screen-title" style={{ fontSize: 'clamp(28px, 4vw, 40px)', margin: '0 0 8px' }}>
+                    {isHindi ? 'महाराष्ट्र व केंद्र सरकारी योजना' : 'Maharashtra & Central Govt Schemes'}
+                  </h1>
+                  <p className="screen-copy">{t('tagline')}</p>
+                </div>
+
+                {/* Instant Search Bar */}
+                <div className="search-bar-wrap">
+                  <Search className="search-icon-left" size={18} />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder={t('searchPlaceholder')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="search-clear-btn"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Multi-facet Filter Section */}
+                <div className="filter-section">
+                  {/* Portal Filter */}
+                  <div className="filter-group">
+                    <span className="filter-group-label">{t('filterByPortal')}:</span>
+                    {(['all', 'mahadbt', 'central', 'state'] as const).map((portal) => (
+                      <button
+                        key={portal}
+                        type="button"
+                        className={`filter-chip ${portalFilter === portal ? 'active' : ''}`}
+                        onClick={() => setPortalFilter(portal)}
+                      >
+                        {portal === 'all'
+                          ? t('allPortals')
+                          : portal === 'mahadbt'
+                          ? t('mahadbtPortal')
+                          : portal === 'central'
+                          ? t('centralPortal')
+                          : t('statePortal')}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Area Filter */}
+                  <div className="filter-group">
+                    <span className="filter-group-label">{t('filterByArea')}:</span>
+                    <button
+                      type="button"
+                      className={`filter-chip ${areaFilter === 'all' ? 'active' : ''}`}
+                      onClick={() => setAreaFilter('all')}
+                    >
+                      {t('allAreas')}
+                    </button>
+                    {supportAreas.map((area) => (
+                      <button
+                        key={area.value}
+                        type="button"
+                        className={`filter-chip ${areaFilter === area.value ? 'active' : ''}`}
+                        onClick={() => setAreaFilter(area.value)}
+                      >
+                        {area[language]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Caste Category Filter */}
+                  <div className="filter-group">
+                    <span className="filter-group-label">{t('filterByCaste')}:</span>
+                    {casteChoices.map((choice) => (
+                      <button
+                        key={choice.value}
+                        type="button"
+                        className={`filter-chip ${casteFilter === choice.value ? 'active' : ''}`}
+                        onClick={() => setCasteFilter(choice.value)}
+                      >
+                        {choice.label[language]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Results Count Banner */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--muted-foreground))' }}>
+                    {filteredSchemes.length} {t('schemesFound')}
+                  </div>
+                  {(searchQuery || portalFilter !== 'all' || areaFilter !== 'all' || casteFilter !== 'all') && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setPortalFilter('all');
+                        setAreaFilter('all');
+                        setCasteFilter('all');
+                      }}
+                    >
+                      {t('restart')}
+                    </button>
+                  )}
+                </div>
+
+                {/* Scheme Cards Grid */}
+                {filteredSchemes.length === 0 ? (
+                  <div className="empty-state">
+                    <p style={{ fontSize: 16 }}>{isHindi ? 'कोणतीही योजना सापडली नाही. शोध शब्द किंवा फिल्टर्स बदलून पहा.' : 'No schemes match your filter criteria. Try resetting search or filters.'}</p>
+                    <button
+                      type="button"
+                      className="btn secondary small"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setPortalFilter('all');
+                        setAreaFilter('all');
+                        setCasteFilter('all');
+                      }}
+                    >
+                      {t('restart')}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {filteredSchemes.map((scheme) => (
+                      <article key={scheme.id} className="scheme-card-enhanced">
+                        <div className="card-header-row">
+                          <div className="card-badges">
+                            <span className={`portal-badge ${scheme.portal}`}>
+                              {scheme.portal === 'mahadbt' ? 'MahaDBT' : scheme.portal === 'central' ? 'Central (NSP/PM)' : 'State Portal'}
+                            </span>
+                            <span className="card-department">{scheme.department[language]}</span>
+                          </div>
+                          <span className="mini-tag">{scheme.category}</span>
+                        </div>
+
+                        <div>
+                          <h2
+                            className="card-title-link"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => openSchemeDetail(scheme)}
+                          >
+                            {scheme.title[language]}
+                          </h2>
+                          <p style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))', margin: '4px 0 8px', lineHeight: 1.5 }}>
+                            {scheme.summary[language]}
+                          </p>
+                        </div>
+
+                        {/* Benefit highlight */}
+                        <div>
+                          <span className="benefit-pill">
+                            <Sparkles size={14} /> {scheme.benefit[language]}
+                          </span>
+                        </div>
+
+                        {/* Direct Action Buttons */}
+                        <div className="card-btn-row">
+                          <button
+                            type="button"
+                            className="btn-sm-secondary"
+                            onClick={() => openSchemeDetail(scheme)}
+                          >
+                            {t('viewDetails')} <ChevronRight size={14} />
+                          </button>
+
+                          <a
+                            className="btn-sm-primary"
+                            href={scheme.applicationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink size={13} /> {scheme.applicationLabel[language]}
+                          </a>
+
+                          {scheme.registrationUrl && (
+                            <a
+                              className="btn-sm-register"
+                              href={scheme.registrationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <UserPlus size={13} /> {scheme.registrationLabel?.[language] ?? t('registerOnPortal')}
+                            </a>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: QUICK 1-CLICK ELIGIBILITY CHECKER */}
+            {viewTab === 'checker' && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <h1 className="screen-title" style={{ fontSize: 'clamp(28px, 4vw, 40px)', margin: '0 0 8px' }}>
+                    {isHindi ? 'झटपट पात्रता तपासणी (1-Click Checker)' : 'Instant 1-Click Eligibility Checker'}
+                  </h1>
+                  <p className="screen-copy">
+                    {isHindi
+                      ? 'तुमचे अधिवास, जात प्रवर्ग आणि कौटुंबिक उत्पन्न निवडा; कोणत्या योजनांमध्ये तुम्ही पात्र आहात ते त्वरित पहा.'
+                      : 'Set your profile below. All MahaDBT & Central schemes evaluate in real-time instantly.'}
+                  </p>
+                </div>
+
+                {/* Profile Controls Box */}
+                <div className="eligibility-quick-grid">
+                  <div>
+                    <label className="quick-control-label">{fieldLabels.mahadbtDomicile[language]}</label>
+                    <select
+                      className="quick-select"
+                      value={quickProfile.mahadbtDomicile ?? 'yes'}
+                      onChange={(e) => handleQuickChange('mahadbtDomicile', e.target.value)}
+                    >
+                      <option value="yes">{isHindi ? 'होय (महाराष्ट्र रहिवासी / Domicile)' : 'Yes (Maharashtra Resident / Domicile)'}</option>
+                      <option value="no">{isHindi ? 'नाही (इतर राज्य / Other State)' : 'No (Other State Resident)'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="quick-control-label">{fieldLabels.casteCategory[language]}</label>
+                    <select
+                      className="quick-select"
+                      value={quickProfile.casteCategory ?? 'open'}
+                      onChange={(e) => handleQuickChange('casteCategory', e.target.value)}
+                    >
+                      <option value="open">General / Open / EBC</option>
+                      <option value="obc">OBC (Other Backward Class)</option>
+                      <option value="sc">SC (Scheduled Caste)</option>
+                      <option value="st">ST (Scheduled Tribe / आदिवासी)</option>
+                      <option value="vjnt">VJNT / NT (विजाभज)</option>
+                      <option value="sbc">SBC (विशेष मागास प्रवर्ग)</option>
+                      <option value="minority">Religious Minority (अल्पसंख्याक)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="quick-control-label">{fieldLabels.annualIncome[language]}</label>
+                    <select
+                      className="quick-select"
+                      value={quickProfile.annualIncome ?? '2.5-to-8'}
+                      onChange={(e) => handleQuickChange('annualIncome', e.target.value)}
+                    >
+                      <option value="under-1.5">{isHindi ? '₹1.5 लाखांपर्यंत / वर्ष' : 'Up to ₹1.5 Lakh / yr'}</option>
+                      <option value="1.5-to-2.5">{isHindi ? '₹1.5 लाख ते ₹2.5 लाख' : '₹1.5 Lakh to ₹2.5 Lakh'}</option>
+                      <option value="2.5-to-8">{isHindi ? '₹2.5 लाख ते ₹8 लाख' : '₹2.5 Lakh to ₹8 Lakh'}</option>
+                      <option value="above-8">{isHindi ? '₹8 लाखांपेक्षा जास्त' : 'Above ₹8 Lakh / yr'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="quick-control-label">{fieldLabels.occupationStatus[language]}</label>
+                    <select
+                      className="quick-select"
+                      value={quickProfile.occupationStatus ?? 'student-technical'}
+                      onChange={(e) => handleQuickChange('occupationStatus', e.target.value)}
+                    >
+                      <option value="student-technical">{isHindi ? 'अभियांत्रिकी / व्यावसायिक विद्यार्थी (CAP)' : 'Engineering / Tech Student (CAP)'}</option>
+                      <option value="student-higher">{isHindi ? 'पदवी विद्यार्थी (BA, B.Com, B.Sc)' : 'Degree Student (BA, B.Com, B.Sc)'}</option>
+                      <option value="student-medical">{isHindi ? 'वैद्यकीय विद्यार्थी (MBBS, BAMS, Nursing)' : 'Medical Student (MBBS, BAMS, Nursing)'}</option>
+                      <option value="farmer">{isHindi ? 'शेतकरी (Farmer / Cultivator)' : 'Farmer / Cultivator'}</option>
+                      <option value="woman">{isHindi ? 'महिला (Woman Applicant)' : 'Woman Applicant'}</option>
+                      <option value="senior-citizen">{isHindi ? 'ज्येष्ठ नागरिक (६०+ वर्षे)' : 'Senior Citizen (60+ yrs)'}</option>
+                      <option value="divyang">{isHindi ? 'दिव्यांग / निराधार' : 'Divyang / Destitute'}</option>
+                      <option value="other">{isHindi ? 'इतर नागरिक' : 'Other Citizen'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="quick-control-label">{fieldLabels.farmerLandholder[language]}</label>
+                    <select
+                      className="quick-select"
+                      value={quickProfile.farmerLandholder ?? 'no'}
+                      onChange={(e) => handleQuickChange('farmerLandholder', e.target.value)}
+                    >
+                      <option value="no">{isHindi ? 'नाही / बिगर-शेतकरी' : 'No (Non-farmer / No Land)'}</option>
+                      <option value="yes">{isHindi ? 'होय, शेतजमीन आहे (७/१२)' : 'Yes, owns cultivable land (7/12)'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Filter Checkbox */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 24px' }}>
+                  <input
+                    type="checkbox"
+                    id="showEligibleOnly"
+                    checked={showEligibleOnly}
+                    onChange={(e) => setShowEligibleOnly(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'hsl(var(--primary))' }}
+                  />
+                  <label htmlFor="showEligibleOnly" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    {isHindi ? 'फक्त पात्र असलेल्या योजना दाखवा (Show Eligible Only)' : 'Show Only Fully Eligible Schemes'}
+                  </label>
+                </div>
+
+                {/* Results Categories */}
+                <div className="result-groups">
+                  {/* ALIGNED & ELIGIBLE */}
+                  <section>
+                    <h2 className="group-heading">
+                      <span className="group-mark" />
+                      <span>{t('aligned')}</span>
+                      <span className="group-count">({checkerGroups.eligible.length})</span>
+                    </h2>
+                    {checkerGroups.eligible.length === 0 ? (
+                      <div className="empty-state">{isHindi ? 'या निकषांवर थेट जुळणारी योजना नाही.' : 'No schemes strictly matching this profile.'}</div>
+                    ) : (
+                      checkerGroups.eligible.map(({ scheme }) => (
+                        <article key={scheme.id} className="scheme-card-enhanced" style={{ borderLeft: '4px solid hsl(var(--primary))' }}>
+                          <div className="card-header-row">
+                            <div className="card-badges">
+                              <span className={`portal-badge ${scheme.portal}`}>{scheme.portal.toUpperCase()}</span>
+                              <span className="card-department">{scheme.department[language]}</span>
+                            </div>
+                            <span style={{ fontSize: 11, color: 'hsl(var(--primary))', fontWeight: 700 }}>
+                              ✓ {isHindi ? 'पात्र' : 'Eligible'}
+                            </span>
+                          </div>
+
+                          <h3
+                            className="card-title-link"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => openSchemeDetail(scheme)}
+                          >
+                            {scheme.title[language]}
+                          </h3>
+                          <p style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))', margin: 0 }}>
+                            {scheme.summary[language]}
+                          </p>
+
+                          <div>
+                            <span className="benefit-pill">
+                              <CheckCircle2 size={14} /> {scheme.benefit[language]}
+                            </span>
+                          </div>
+
+                          <div className="card-btn-row">
+                            <button
+                              type="button"
+                              className="btn-sm-secondary"
+                              onClick={() => openSchemeDetail(scheme)}
+                            >
+                              {t('viewDetails')} <ChevronRight size={14} />
+                            </button>
+                            <a
+                              className="btn-sm-primary"
+                              href={scheme.applicationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink size={13} /> {scheme.applicationLabel[language]}
+                            </a>
+                            {scheme.registrationUrl && (
+                              <a
+                                className="btn-sm-register"
+                                href={scheme.registrationUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <UserPlus size={13} /> {t('registerOnPortal')}
+                              </a>
+                            )}
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </section>
+
+                  {/* CHECK REQUIRED / SPECIFIC ROUTE */}
+                  {!showEligibleOnly && (
+                    <section>
+                      <h2 className="group-heading">
+                        <span className="group-mark unknown" />
+                        <span>{t('check')}</span>
+                        <span className="group-count">({checkerGroups.check.length})</span>
+                      </h2>
+                      {checkerGroups.check.map(({ scheme }) => (
+                        <article key={scheme.id} className="scheme-card-enhanced" style={{ opacity: 0.9 }}>
+                          <div className="card-header-row">
+                            <div className="card-badges">
+                              <span className={`portal-badge ${scheme.portal}`}>{scheme.portal.toUpperCase()}</span>
+                              <span className="card-department">{scheme.department[language]}</span>
+                            </div>
+                            <span className="mini-tag">{scheme.category}</span>
+                          </div>
+
+                          <h3
+                            className="card-title-link"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => openSchemeDetail(scheme)}
+                          >
+                            {scheme.title[language]}
+                          </h3>
+                          <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0 }}>
+                            {scheme.summary[language]}
+                          </p>
+
+                          <div className="card-btn-row">
+                            <button
+                              type="button"
+                              className="btn-sm-secondary"
+                              onClick={() => openSchemeDetail(scheme)}
+                            >
+                              {t('viewDetails')} <ChevronRight size={14} />
+                            </button>
+                            <a
+                              className="btn-sm-primary"
+                              href={scheme.applicationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink size={13} /> {scheme.applicationLabel[language]}
+                            </a>
+                          </div>
+                        </article>
+                      ))}
+                    </section>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: STEP-BY-STEP GUIDED WIZARD ASSISTANT */}
+            {viewTab === 'wizard' && (
+              <div className="screen-card">
+                {wizardScreen === 'category' && (
+                  <div>
+                    <div className="eyebrow">{isHindi ? 'पायरी १: सहाय्य क्षेत्र निवडा' : 'STEP 1: CHOOSE SUPPORT AREA'}</div>
+                    <h1 className="screen-title">{isHindi ? 'तुम्हाला कोणत्या क्षेत्रात योजना हवी आहे?' : 'What kind of support are you looking for?'}</h1>
+                    <p className="screen-copy">
+                      {isHindi
+                        ? 'विशिष्ट क्षेत्र निवडा किंवा संपूर्ण २८+ योजनांच्या सूचीमध्ये एकामागून एक प्रश्न विचारा.'
+                        : 'Choose an area to see only relevant questions, or look across all schemes.'}
+                    </p>
+
+                    <div className="option-list category-list" style={{ marginTop: 24 }}>
+                      {supportAreas.map((area, index) => (
+                        <button
+                          type="button"
+                          key={area.value}
+                          className="choice"
+                          onClick={() => startWizard(area.value)}
+                        >
+                          <span>
+                            <span className="choice-title">{area[language]}</span>
+                            <span className="choice-desc">{isHindi ? `क्षेत्र ${index + 1}` : `Area ${index + 1}`}</span>
+                          </span>
+                          <span className="choice-icon"><ChevronRight size={17} /></span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="choice"
+                        onClick={() => startWizard('all')}
+                      >
+                        <span>
+                          <span className="choice-title">{t('allAreas')}</span>
+                          <span className="choice-desc">{isHindi ? 'सर्व योजनांमध्ये शोधा' : 'Look across all scheme catalogs'}</span>
+                        </span>
+                        <span className="choice-icon"><Sparkles size={17} /></span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {wizardScreen === 'questions' && wizardFields[wizardIndex] && (
+                  <div>
+                    <div className="question-count">
+                      {isHindi ? `प्रश्न ${wizardIndex + 1} / ${wizardFields.length}` : `QUESTION ${wizardIndex + 1} OF ${wizardFields.length}`}
+                    </div>
+                    <div className="progress-track">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${((wizardIndex + 1) / Math.max(1, wizardFields.length)) * 100}%` }}
+                      />
+                    </div>
+
+                    <h2 className="screen-title question-title" style={{ marginTop: 20 }}>
+                      {fieldLabels[wizardFields[wizardIndex]][language]}
+                    </h2>
+                    <p className="screen-copy">
+                      {questionHelp[wizardFields[wizardIndex]][language]}
+                    </p>
+
+                    <div className="option-list" style={{ marginTop: 24 }}>
+                      {(options[wizardFields[wizardIndex]] ?? []).map((option) => (
+                        <button
+                          type="button"
+                          key={option.value}
+                          className={`choice ${wizardProfile[wizardFields[wizardIndex]] === option.value ? 'selected' : ''}`}
+                          onClick={() => answerWizard(option.value)}
+                        >
+                          <span>
+                            <span className="choice-title">{option.label[language]}</span>
+                            {option.description && (
+                              <span className="choice-desc">{option.description[language]}</span>
+                            )}
+                          </span>
+                          <span className="choice-icon"><ChevronRight size={17} /></span>
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        className="choice"
+                        onClick={() => answerWizard(null)}
+                      >
+                        <span className="choice-title">{isHindi ? 'माहिती नाही / सोडून द्या' : 'I do not know / skip this'}</span>
+                        <span className="choice-icon"><CircleHelp size={17} /></span>
+                      </button>
+                    </div>
+
+                    <div className="actions" style={{ marginTop: 28 }}>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          if (wizardIndex > 0) setWizardIndex(wizardIndex - 1);
+                          else setWizardScreen('category');
+                        }}
+                      >
+                        <ArrowLeft size={16} /> {t('back')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn text"
+                        onClick={() => answerWizard(null)}
+                      >
+                        {isHindi ? 'हा प्रश्न वगळा' : 'Skip question'} <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {wizardScreen === 'results' && (
+                  <div>
+                    <div className="eyebrow">{isHindi ? 'तुमच्या उत्तरांवर आधारित' : 'BASED ON YOUR ANSWERS'}</div>
+                    <h1 className="screen-title">{isHindi ? 'तपासणी निकाल' : 'Screening Results'}</h1>
+
+                    <div className="result-groups" style={{ marginTop: 24 }}>
+                      {wizardResults.map(({ scheme, result }) => (
+                        <article key={scheme.id} className="scheme-card-enhanced">
+                          <div className="card-header-row">
+                            <span className={`portal-badge ${scheme.portal}`}>{scheme.portal.toUpperCase()}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: result === true ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}>
+                              {result === true ? `✓ ${t('aligned')}` : result === false ? `✕ ${t('notAligned')}` : `? ${t('check')}`}
+                            </span>
+                          </div>
+
+                          <h3
+                            className="card-title-link"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => openSchemeDetail(scheme)}
+                          >
+                            {scheme.title[language]}
+                          </h3>
+                          <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0 }}>
+                            {scheme.benefit[language]}
+                          </p>
+
+                          <div className="card-btn-row">
+                            <button
+                              type="button"
+                              className="btn-sm-secondary"
+                              onClick={() => openSchemeDetail(scheme)}
+                            >
+                              {t('viewDetails')}
+                            </button>
+                            <a
+                              className="btn-sm-primary"
+                              href={scheme.applicationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink size={13} /> {scheme.applicationLabel[language]}
+                            </a>
+                            {scheme.registrationUrl && (
+                              <a
+                                className="btn-sm-register"
+                                href={scheme.registrationUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <UserPlus size={13} /> {t('registerOnPortal')}
+                              </a>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="actions" style={{ marginTop: 28 }}>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => setWizardScreen('category')}
+                      >
+                        <RotateCcw size={15} /> {isHindi ? 'पुन्हा सुरू करा' : 'Start Again'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Official Disclaimer Footer */}
+            <div className="notice caveat" style={{ marginTop: 36 }}>
+              <AlertCircle size={20} />
+              <div>
+                <strong>{t('caveatTitle')}</strong>
+                {t('caveat')}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
