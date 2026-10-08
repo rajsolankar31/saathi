@@ -18,6 +18,7 @@ SchemeSaathi simplifies this with:
 ---
 
 ## 🚀 Key Features
+## Live link: https://schemesaathi-one.vercel.app/
 
 ### 1. 🔍 Comprehensive Scheme Directory
 - Instant real-time search across scheme names, departments, keywords, and benefit descriptions.
